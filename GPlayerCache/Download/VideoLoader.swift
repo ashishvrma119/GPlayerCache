@@ -1,4 +1,8 @@
-
+//
+//  VideoLoader.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 import AVFoundation
@@ -26,6 +30,8 @@ extension VideoLoader: VideoLoaderType {
         downloader.delegate = self
         downLoaders.append(downloader)
         downloader.execute()
+        print("Total loading request so far \(downLoaders.count)")
+        print("Total item in Queue so far \(DownloadQueue.shared.queue)")
     }
     
     func remove(loadingRequest: AVAssetResourceLoadingRequest) {
@@ -64,10 +70,11 @@ fileprivate struct DownloadQueue {
     
     static let shared = DownloadQueue()
     
+    //let queue: OperationQueue = OperationQueue()
     let queue: OperationQueue = OperationQueue()
-    
     init() {
-        queue.name = "com.video.cache.download.queue"
+        queue.name = "com.Gluedin.download.queue"
+        queue.maxConcurrentOperationCount = 10
     }
 }
 
@@ -117,18 +124,10 @@ class VideoLoader: NSObject {
                                                                    cacheFragments: cacheFragments)
     
     private var downLoaders_: [VideoDownloaderType] = []
-//    private let lock = NSLock()
+    private let lock = NSLock()
     private var downLoaders: [VideoDownloaderType] {
-        get {
-//            lock.lock();
-//            defer { lock.unlock()};
-            return downLoaders_
-        }
-        set {
-//            lock.lock();
-//            defer { lock.unlock() };
-            downLoaders_ = newValue
-        }
+        get { lock.lock(); defer { lock.unlock() }; return downLoaders_ }
+        set { lock.lock(); defer { lock.unlock() }; downLoaders_ = newValue }
     }
 }
 

@@ -1,4 +1,8 @@
-
+//
+//  CodingRange.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

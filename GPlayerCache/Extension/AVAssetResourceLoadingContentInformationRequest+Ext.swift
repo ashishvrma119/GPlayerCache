@@ -1,3 +1,8 @@
+//
+//  AVAssetResourceLoadingContentInformationRequest+Ext.swift
+//
+//  GluedInCache
+//
 
 import AVFoundation
 

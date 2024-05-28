@@ -1,3 +1,8 @@
+//
+//  AVPlayerItem+Cache.swift
+//  GluedInCache
+//
+
 import AVFoundation
 import ObjectiveC.runtime
 
@@ -13,10 +18,10 @@ extension AVPlayerItem {
         
         let videoUrl = VideoURL(cacheKey: key, originUrl: url)
         manager.visit(url: videoUrl)
-        
+        let concerentDespectQueue = DispatchQueue(label: "com.GluedIn.gluedinconcerent", attributes: .concurrent)
         let loaderDelegate = VideoResourceLoaderDelegate(manager: manager, url: videoUrl, cacheFragments: cacheFragments)
         let urlAsset = AVURLAsset(url: loaderDelegate.url.includeVideoCacheSchemeUrl, options: nil)
-        urlAsset.resourceLoader.setDelegate(loaderDelegate, queue: .main)
+        urlAsset.resourceLoader.setDelegate(loaderDelegate, queue: concerentDespectQueue)
         
         self.init(asset: urlAsset)
         canUseNetworkResourcesForLiveStreamingWhilePaused = true

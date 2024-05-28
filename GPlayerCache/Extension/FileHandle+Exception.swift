@@ -1,3 +1,8 @@
+//
+//  FileHandle+Exception.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

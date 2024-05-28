@@ -1,12 +1,18 @@
+//
+//  AVPlayerItem+Cache.swift
+//
+//  GluedInCache
+//
+
 import Foundation
 import UIKit
+import AVFoundation
 
 enum BoolValues {
-    
-    case `default`(Bool)    /// 默认
-    case auto(Bool)         /// 自动
-    case manual(Bool)       /// 手动
-    
+    case `default`(Bool)
+    case auto(Bool)
+    case manual(Bool)
+
     var value: Bool {
         switch self {
         case .default(let b):   return b
@@ -18,66 +24,53 @@ enum BoolValues {
 
 let FileM = FileManager.default
 
-public class VideoCacheManager: NSObject {
-    
-    /// shared instance, directory default NSTemporaryDirectory/VideoCache
-    public static let `default` = VideoCacheManager(directory: NSTemporaryDirectory().appending("/VideoCache"))
-    
-    /// default NSTemporaryDirectory/VideoCache/
+public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
+    public static let `default` = VideoCacheManager(directory: NSTemporaryDirectory().appending("GluedInCache"))
+
     public let directory: String
-    
-    /// default 1GB
-    public var capacityLimit: Int64 = Int64(1).GB {
+
+    public var capacityLimit: Int64 = Int64(200).MB {
         didSet { checkAllow() }
     }
-    
-    /// default nil, fileName is original value
+
     public var fileNameConvertion: ((_ identifier: String) -> String)?
     
-    /// default false
     public var isAutoCheckUsage: Bool = false
     
-    /// default true
     public var allowWrite: Bool {
         get {
-//            lock.lock()
-//            defer { lock.unlock() }
+            lock.lock()
+            defer { lock.unlock() }
             return allowWrite_.value
         }
         set {
-//            lock.lock()
-//            defer { lock.unlock() }
+            lock.lock()
+            defer { lock.unlock() }
             allowWrite_ = .manual(newValue)
         }
     }
-    
+
     private var allowWrite_: BoolValues = .default(true)
-    
-    /// default none
+
     public static var logLevel: VideoCacheLogLevel {
         get { return videoCacheLogLevel }
         set { videoCacheLogLevel = newValue }
     }
-    
+
     deinit {
         NotificationCenter.default.removeObserver(self, name: VideoFileHandle.didSynchronizeNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
     }
-    
+
     public init(directory path: String) {
-        
         directory = path
-        
         super.init()
-        
         createCacheDirectory()
-        
         checkAllow()
-        
         NotificationCenter.default.addObserver(self, selector: #selector(autoCheckUsage), name: VideoFileHandle.didSynchronizeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
-    
+
     private lazy var lru: VideoLRUConfiguration = {
         let filePath = paths.lruFilePath()
         if let lruConfig = VideoLRUConfiguration.read(from: filePath) {
@@ -88,29 +81,63 @@ public class VideoCacheManager: NSObject {
         lruConfig.synchronize()
         return lruConfig
     }()
-    
+
     private var lastCheckTimeInterval: TimeInterval = Date().timeIntervalSince1970
-    
+
     private var downloadingUrls_: [VideoCacheKeyType: VideoURLType] = [:]
-    
-//    private let lock = NSLock()
+
+    private let lock = NSLock()
     
     private var reserveRequired = true
-}
-
-extension VideoCacheManager {
     
-    public var lruConfig: VideoLRUConfigurationType { return lru }
-}
+    private var downloaders: [String: VideoDownloader] = [:]
+    private let downloadQueue = DispatchQueue(label: "com.GluedIn.downloadQueue", attributes: .concurrent)
+    private let downloadLock = NSLock()
 
-extension VideoCacheManager {
+    public func startDownload(for url: VideoURLType,
+                              loadingRequest: AVAssetResourceLoadingRequest,
+                              paths: VideoCachePaths, 
+                              fileHandle: VideoFileHandle) {
+        downloadQueue.async(flags: .barrier) {
+            let downloader = VideoDownloader(paths: paths, session: URLSession.shared, url: url, loadingRequest: loadingRequest, fileHandle: fileHandle)
+            downloader.delegate = self
+            self.addDownloading(url: url)
+            self.downloaders[url.key] = downloader
+            downloader.execute()
+        }
+    }
+
+    public func stopAllDownloads() {
+        downloadQueue.async(flags: .barrier) {
+            self.downloaders.forEach { $0.value.cancel() }
+            self.downloaders.removeAll()
+        }
+    }
+
+    private func cleanupDownloader(_ downloader: VideoDownloader) {
+        downloadQueue.async(flags: .barrier) {
+            self.removeDownloading(url: downloader.url)
+            self.downloaders.removeValue(forKey: downloader.url.key)
+        }
+    }
+
+    func downloaderAllowWriteData(_ downloader: VideoDownloader) -> Bool {
+        return true
+    }
+
+    func downloaderFinish(_ downloader: VideoDownloader) {
+        cleanupDownloader(downloader)
+    }
+
+    func downloader(_ downloader: VideoDownloader, finishWith error: Error?) {
+        cleanupDownloader(downloader)
+    }
+
+    public var lruConfig: VideoLRUConfigurationType { return lru }
     
     private func checkAllow() {
-        
         guard isAutoCheckUsage else { return }
-        
         VLog(.info, "allow write: \(allowWrite_)")
-        
         switch allowWrite_ {
         case .default, .auto:
             if let availableCapacity = UIDevice.current.availableCapacity {
@@ -128,20 +155,14 @@ extension VideoCacheManager {
     
     @objc
     private func autoCheckUsage() {
-        
         guard isAutoCheckUsage else { return }
-        
         let now = Date().timeIntervalSince1970
         guard now - lastCheckTimeInterval > 10 else { return }
         lastCheckTimeInterval = now
-        
         checkUsage()
         checkAllow()
     }
-}
 
-extension VideoCacheManager {
-    
     private func createCacheDirectory() {
         if !FileM.fileExists(atPath: directory) {
             do {
@@ -162,8 +183,9 @@ extension VideoCacheManager {
         return contents.reduce(0) { $0 + calculateContent($1) }
     }
     
-    /// if cache key is nil, it will be filled by url.absoluteString's md5 string
     public func clean(url: VideoURLType, reserve: Bool = true) throws {
+        downloadLock.lock()
+        defer { downloadLock.unlock() }
         
         VLog(.info, "clean: \(url)")
         
@@ -189,8 +211,7 @@ extension VideoCacheManager {
         
         let reservedLength = config.reservedLength
         
-        guard reservedLength > 0
-            else {
+        guard reservedLength > 0 else {
             try cleanAllClosure()
             return
         }
@@ -215,13 +236,13 @@ extension VideoCacheManager {
         }
     }
     
-    /// clean all cache
     public func cleanAll() throws {
-        
         reserveRequired = true
         
-        let urls = downloadingUrls
+        downloadLock.lock()
+        defer { downloadLock.unlock() }
         
+        let urls = downloadingUrls
         guard urls.count > 0 else {
             try FileM.removeItem(atPath: directory)
             createCacheDirectory()
@@ -243,16 +264,12 @@ extension VideoCacheManager {
             try FileM.removeItem(atPath: directory.appending("/\(content)"))
         }
     }
-}
 
-extension VideoCacheManager {
-    
     func visit(url: VideoURLType) {
         lru.visit(url: url)
     }
-    
+
     func checkUsage() {
-        
         guard let size = try? calculateSize() else { return }
         
         VLog(.info, "cache total size: \(size)")
@@ -264,38 +281,31 @@ extension VideoCacheManager {
         guard oldestUrls.count > 0 else { return }
         
         oldestUrls.forEach { try? clean(url: $0, reserve: reserveRequired) }
-        
-//        reserveRequired.toggle()
     }
-}
 
-extension VideoCacheManager {
-    
     var paths: VideoCachePaths {
         return VideoCachePaths(directory: directory, convertion: fileNameConvertion)
     }
-}
 
-extension VideoCacheManager {
-    
     func addDownloading(url: VideoURLType) {
         downloadingUrls[url.key] = url
     }
-    
+
     func removeDownloading(url: VideoURLType) {
         downloadingUrls.removeValue(forKey: url.key)
     }
-    
+
     public var downloadingUrls: [VideoCacheKeyType: VideoURLType] {
         get {
-//            lock.lock()
-//            defer { lock.unlock() }
+            lock.lock()
+            defer { lock.unlock() }
             return downloadingUrls_
         }
         set {
-//            lock.lock()
-//            defer { lock.unlock() }
+            lock.lock()
+            defer { lock.unlock() }
             downloadingUrls_ = newValue
         }
     }
 }
+

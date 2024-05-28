@@ -1,3 +1,8 @@
+//
+//  UIDevice+Capacity.swift
+//
+//  GluedInCache
+//
 
 import UIKit
 

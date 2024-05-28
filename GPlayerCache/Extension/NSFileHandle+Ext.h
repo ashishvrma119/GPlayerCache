@@ -1,3 +1,8 @@
+//
+//  NSFileHandle+Ext.h
+//
+//  GluedInCache
+//
 
 #import <Foundation/Foundation.h>
 

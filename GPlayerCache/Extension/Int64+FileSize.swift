@@ -1,3 +1,8 @@
+//
+//  Int64+FileSize.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

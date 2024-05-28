@@ -1,3 +1,9 @@
+//
+//  VideoResourceLoaderDelegate.swift
+//
+//  GluedInCache
+//
+
 
 import AVFoundation
 
@@ -145,6 +151,19 @@ extension VideoResourceLoaderDelegate: AVAssetResourceLoaderDelegate {
         }
         return true
     }
+    
+//    func resourceLoader(_ resourceLoader: AVAssetResourceLoader, 
+//                        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
+//        let url = self.url
+//            let paths = VideoCacheManager.default.paths
+//        let fileHandle = VideoFileHandle(paths: paths,
+//                                         url: url,
+//                                         cacheFragments: self.cacheFragments)
+//
+//        VideoCacheManager.default.startDownload(for: url, loadingRequest: loadingRequest, paths: paths, fileHandle: fileHandle)
+//            
+//            return true
+//        }
     
     func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
                         didCancel loadingRequest: AVAssetResourceLoadingRequest) {

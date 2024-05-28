@@ -1,3 +1,8 @@
+//
+//  VLog.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

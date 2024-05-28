@@ -1,4 +1,8 @@
-
+//
+//  String+Ext.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 import CommonCrypto

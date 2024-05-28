@@ -1,3 +1,8 @@
+//
+//  URLResponse+Ext.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 import MobileCoreServices

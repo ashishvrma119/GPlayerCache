@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "GPlayerCache"
-  s.version      = "1.0.0"
+  s.version      = "1.0.1"
   s.summary      = "A caching library for GPlayerCache."
   s.description  = "AVGPlayerCache is a library that provides caching functionality for GPlayerCache. It allows developers to cache video files locally for efficient playback and reduces network usage."
   s.homepage     = "https://github.com/ashishvrma119/GPlayerCache"
@@ -24,8 +24,8 @@ Pod::Spec.new do |s|
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   THE SOFTWARE.' }
   s.author       = { 'GPlayerCache' => '“ashishvrma119@gmail.com”' }
-  s.platform     = :ios, "11.0"
-  s.ios.deployment_target = "11.0"
+  s.platform     = :ios, "14.0"
+  s.ios.deployment_target = "14.0"
   s.swift_version = "5.1"
 
   s.source       = { :git => "https://github.com/ashishvrma119/GPlayerCache.git", :tag => s.version.to_s }

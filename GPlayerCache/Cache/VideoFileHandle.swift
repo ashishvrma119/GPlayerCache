@@ -1,3 +1,8 @@
+//
+//  AVPlayerItem+Cache.swift
+//
+//  GluedInCache
+//
 
 
 import Foundation
@@ -26,7 +31,7 @@ extension VideoFileHandleType {
     var isNeedUpdateContentInfo: Bool { return configuration.contentInfo.totalLength <= 0 }
 }
 
-class VideoFileHandle {
+public class VideoFileHandle {
     
     let url: VideoURLType
     
@@ -72,7 +77,7 @@ class VideoFileHandle {
     
     private var isWriting: Bool = false
     
-//    private let lock = NSLock()
+    private let lock = NSLock()
 }
 
 extension VideoFileHandle {
@@ -116,8 +121,8 @@ extension VideoFileHandle: VideoFileHandleType {
     
     func readData(for range: VideoRange) throws -> Data {
         
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         
         try readHandle?.throwError_seek(toFileOffset: UInt64(range.lowerBound))
         let data = try readHandle?.throwError_readData(ofLength: UInt(range.length)) ?? Data()
@@ -126,8 +131,8 @@ extension VideoFileHandle: VideoFileHandleType {
     
     func writeData(data: Data, for range: VideoRange) throws {
         
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         
         guard let handle = writeHandle else { return }
         
@@ -148,8 +153,8 @@ extension VideoFileHandle: VideoFileHandleType {
     @discardableResult
     func synchronize(notify: Bool = true) throws -> Bool {
         
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         
         guard let handle = writeHandle else { return false }
         

@@ -1,3 +1,8 @@
+//
+//  AVPlayerItem+Cache.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 
@@ -53,12 +58,12 @@ class VideoConfiguration: NSObject, NSCoding {
         aCoder.encode(fragments.compactMap { $0.range }, forKey: "fragments")
     }
     
-    init(url: VideoURLType) {
+    public init(url: VideoURLType) {
         self.url = VideoURL(cacheKey: url.key, originUrl: url.url)
         super.init()
     }
     
-//    private let lock = NSLock()
+    private let lock = NSLock()
     
     override var description: String {
         return ["url": url, "contentInfo": contentInfo, "reservedLength": reservedLength, "lastTimeInterval": lastTimeInterval, "fragments": fragments].description
@@ -69,29 +74,29 @@ extension VideoConfiguration: VideoConfigurationType {
     
     @discardableResult
     func synchronize(to path: String) -> Bool {
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         lastTimeInterval = Date().timeIntervalSince1970
         return NSKeyedArchiver.archiveRootObject(self, toFile: path)
     }
     
     func overlaps(_ range: VideoRange) -> [VideoRange] {
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         return fragments.overlaps(range)
     }
     
     func reset(fragment: VideoRange) {
         VLog(.data, "reset fragment: \(fragment)")
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         fragments = [fragment]
     }
     
     func add(fragment: VideoRange) {
         VLog(.data, "add fragment: \(fragment)")
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         guard fragment.isValid else { return }
         fragments = fragments.union(fragment)
     }

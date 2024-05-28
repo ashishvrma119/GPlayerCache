@@ -1,3 +1,8 @@
+//
+//  AVPlayerItem+Cache.swift
+//
+//  GluedInCache
+//
 
 
 import Foundation
@@ -33,8 +38,8 @@ extension VideoLRUConfiguration: VideoLRUConfigurationType {
     @discardableResult
     func visit(url: VideoURLType) -> Bool {
         VLog(.info, "use url: \(url)")
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         if let content = contentMap[url.key] {
             content.use()
         } else {
@@ -47,16 +52,16 @@ extension VideoLRUConfiguration: VideoLRUConfigurationType {
     @discardableResult
     func delete(url: VideoURLType) -> Bool {
         VLog(.info, "delete url: \(url)")
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         contentMap.removeValue(forKey: url.key)
         return synchronize()
     }
     
     @discardableResult
     func deleteAll(without downloading: [VideoCacheKeyType: VideoURLType]) -> Bool {
-//        lock.lock()
-//        defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         contentMap = contentMap.filter { downloading[$0.key] != nil }
         return synchronize()
     }
@@ -79,18 +84,13 @@ extension VideoLRUConfiguration: VideoLRUConfigurationType {
     
     func oldestURL(maxLength: Int = 1, without downloading: [VideoCacheKeyType: VideoURLType]) -> [VideoURLType] {
         
-//        lock.lock()
-//        defer { lock.unlock() }
-        
+        lock.lock()
+        defer { lock.unlock() }
         let urls = contentMap.filter { downloading[$0.key] == nil }.values
-        
         VLog(.info, "urls: \(urls)")
-        
         guard urls.count > maxLength else { return urls.compactMap { $0.url} }
-        
         urls.sorted { $0.time < $1.time }.enumerated().forEach { $0.element.weight += ($0.offset + 1) * timeWeight }
         urls.sorted { $0.count < $1.count }.enumerated().forEach { $0.element.weight += ($0.offset + 1) * useWeight }
-        
         return urls.sorted(by: { $0.weight < $1.weight }).prefix(maxLength).compactMap { $0.url }
     }
 }
@@ -130,7 +130,7 @@ class VideoLRUConfiguration: NSObject, NSCoding {
         filePath = path
     }
     
-//    private let lock = NSLock()
+    private let lock = NSLock()
 }
 
 extension LRUContent {
@@ -142,15 +142,10 @@ extension LRUContent {
 }
 
 class LRUContent: NSObject, NSCoding {
-    
     var time: TimeInterval = Date().timeIntervalSince1970
-    
     var count: Int = 1
-    
     var weight: Int = 0
-    
     let url: VideoURL
-    
     init(url: VideoURLType) {
         self.url = VideoURL(cacheKey: url.key, originUrl: url.url)
         super.init()

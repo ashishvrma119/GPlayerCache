@@ -1,3 +1,8 @@
+//
+//  Error+Ext.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

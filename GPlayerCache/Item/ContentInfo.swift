@@ -1,4 +1,8 @@
-
+//
+//  ContentInfo.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

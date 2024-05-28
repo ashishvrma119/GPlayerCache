@@ -1,3 +1,8 @@
+//
+//  Range+Ext.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

@@ -1,3 +1,8 @@
+//
+//  VideoDownloader.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 import AVFoundation
@@ -98,14 +103,12 @@ private var accId: Int { private_id += 1; return private_id }
 class VideoDownloader: NSObject {
     
     weak var delegate: VideoDownloaderDelegate?
-    
     let paths: VideoCachePaths
-    
     let url: VideoURLType
-    
     let loadingRequest: AVAssetResourceLoadingRequest
-    
     let fileHandle: VideoFileHandle
+    var totalCachedData: Int64 = 0
+    let cacheLimit: Int64 = 2 * 1024 * 1024 // 1 MB
     
     deinit {
         VLog(.info, "downloader id: \(id), VideoDownloader deinit\n")
@@ -178,13 +181,10 @@ extension VideoDownloader {
 extension VideoDownloader {
     
     func read(from range: VideoRange) {
-        
         VLog(.data, "downloader id: \(id), read data range: (\(range)) length: \(range.length)")
-        
         do {
             
             let data = try fileHandle.readData(for: range)
-            
             guard range.lowerBound > 0 else {
                 receivedLocal(data: data)
                 return
@@ -205,22 +205,18 @@ extension VideoDownloader {
             receivedLocal(data: data)
             
         } catch {
-            
             VLog(.error, "downloader id: \(id), read local data failure: \(error)")
             finishLoading(error: error)
         }
     }
     
     func download(for range: VideoRange) {
-        
-        VLog(.info, "downloader id: \(id), download range: (\(range)) length: \(range.length)")
         guard let originUrl = loadingRequest.request.url?.originUrl else {
             finishLoading(error: VideoCacheErrors.badUrl.error)
             return
         }
         
         writeOffset = range.lowerBound
-        
         let fromOffset = range.lowerBound
         let toOffset = range.upperBound - 1
         
@@ -241,8 +237,23 @@ extension VideoDownloader {
         
         let range = VideoRange(writeOffset, writeOffset + Int64(data.count))
         VLog(.data, "downloader id: \(id), write data range: (\(range)) length: \(range.length)")
+//        do {
+//            try fileHandle.writeData(data: data, for: range)
+//        } catch {
+//            VLog(.error, "downloader id: \(id), write data failure: \(error)")
+//        }
+//        writeOffset += range.length
         do {
             try fileHandle.writeData(data: data, for: range)
+            totalCachedData += Int64(data.count)
+            if totalCachedData >= cacheLimit {
+                print("URL where data is being printed \(url.key)")
+                print("URL where data is being printed \(paths.cacheFileName(for: url))")
+                print("URL where data is being printed getPlayingAssetId \(GlobalManager.shareInstance.getPlayingAssetId() ?? "")")
+                if url.key != GlobalManager.shareInstance.getPlayingAssetId() {
+                    //finishLoading(error: nil) // Stop further download
+                }
+            }
         } catch {
             VLog(.error, "downloader id: \(id), write data failure: \(error)")
         }
@@ -298,7 +309,6 @@ extension VideoDownloader {
 }
 
 extension VideoDownloader: DownloaderSessionDelegateDelegate {
-    
     func downloaderSession(_ delegate: DownloaderSessionDelegateType,
                            didReceive response: URLResponse) {
         if response.isMediaSource, fileHandle.isNeedUpdateContentInfo {
@@ -331,12 +341,10 @@ extension VideoDownloader: DownloaderSessionDelegateDelegate {
 
 
 protocol DownloaderSessionDelegateType: URLSessionDataDelegate {
-    
     var delegate: DownloaderSessionDelegateDelegate? { get set }
 }
 
 protocol DownloaderSessionDelegateDelegate: NSObjectProtocol {
-    
     func downloaderSession(_ delegate: DownloaderSessionDelegateType, didReceive response: URLResponse)
     func downloaderSession(_ delegate: DownloaderSessionDelegateType, didReceive data: Data)
     func downloaderSession(_ delegate: DownloaderSessionDelegateType, didCompleteWithError error: Error?)
@@ -345,9 +353,7 @@ protocol DownloaderSessionDelegateDelegate: NSObjectProtocol {
 private let DownloadBufferLimit: Int = 1.MB
 
 private class DownloaderSessionDelegate: NSObject, DownloaderSessionDelegateType {
-    
     weak var delegate: DownloaderSessionDelegateDelegate?
-    
     private var bufferData = NSMutableData()
     
     deinit {
@@ -378,53 +384,35 @@ private class DownloaderSessionDelegate: NSObject, DownloaderSessionDelegateType
                     didReceive data: Data) {
         
         VLog(.data, "task: \(dataTask) did receive data: \(data.count)")
-        
         bufferData.append(data)
-        
         let multiple = bufferData.count / DownloadBufferLimit
-        
         guard multiple >= 1 else { return }
-        
         let length = DownloadBufferLimit * multiple
-        
         let chunkRange = NSRange(location: bufferData.startIndex, length: length)
-        
         VLog(.data, "task: buffer data count: \(bufferData.count), subdata: \(chunkRange)")
-        
         let chunkData = bufferData.subdata(with: chunkRange)
-        
         let dataRange = NSRange(location: bufferData.startIndex, length: bufferData.count)
-        
         if let intersectionRange = dataRange.intersection(chunkRange), intersectionRange.length > 0 {
-            
             VLog(.data, "task: buffer data remove subrange: \(intersectionRange)")
-            
             bufferData.replaceBytes(in: intersectionRange, withBytes: nil, length: 0)
         }
-        
         delegate?.downloaderSession(self, didReceive: chunkData)
     }
     
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     didCompleteWithError error: Error?) {
-        
         VLog(.request, "task: \(task) did complete with error: \(String(describing: error))")
-        
         let bufferCount = bufferData.count
-        
-        guard error == nil, bufferCount > 0 else {
+        if bufferCount > 0 {
+            let chunkRange = NSRange(location: bufferData.startIndex, length: bufferCount)
+            let chunkData = bufferData.subdata(with: chunkRange)
             bufferData.setData(Data())
-            delegate?.downloaderSession(self, didCompleteWithError: error)
-            return
+            delegate?.downloaderSession(self, didReceive: chunkData)
         }
-        
-        let chunkRange = NSRange(location: bufferData.startIndex, length: bufferCount)
-        let chunkData = bufferData.subdata(with: chunkRange)
-        
-        bufferData.setData(Data())
-        
-        delegate?.downloaderSession(self, didReceive: chunkData)
+        bufferData.setData(Data()) // Clear bufferData to release memory
         delegate?.downloaderSession(self, didCompleteWithError: error)
+        delegate = nil // Explicitly nil out the delegate to break any potential strong reference cycles
     }
 }
+

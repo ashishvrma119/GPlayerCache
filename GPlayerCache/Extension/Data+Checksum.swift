@@ -1,3 +1,8 @@
+//
+//  Data+CheckSum.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 

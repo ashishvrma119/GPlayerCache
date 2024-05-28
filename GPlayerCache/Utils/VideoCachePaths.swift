@@ -1,13 +1,17 @@
-
+//
+//  VideoCachePaths.swift
+//
+//  GluedInCache
+//
 
 import Foundation
 
-struct VideoCachePaths {
+public class VideoCachePaths {
     
     var directory: String
     var convertion: ((_ identifier: String) -> String)?
     
-    init(directory: String, convertion: ((_ identifier: String) -> String)? = nil) {
+    public init(directory: String, convertion: ((_ identifier: String) -> String)? = nil) {
         self.directory = directory
         self.convertion = convertion
     }
