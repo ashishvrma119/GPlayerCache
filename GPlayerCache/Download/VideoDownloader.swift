@@ -249,10 +249,10 @@ extension VideoDownloader {
             if totalCachedData >= cacheLimit {
                 print("URL where data is being printed \(url.key)")
                 print("URL where data is being printed \(paths.cacheFileName(for: url))")
-                print("URL where data is being printed getPlayingAssetId \(GlobalManager.shareInstance.getPlayingAssetId() ?? "")")
-                if url.key != GlobalManager.shareInstance.getPlayingAssetId() {
+//                print("URL where data is being printed getPlayingAssetId \(GlobalManager.shareInstance.getPlayingAssetId() ?? "")")
+//                if url.key != GlobalManager.shareInstance.getPlayingAssetId() {
                     //finishLoading(error: nil) // Stop further download
-                }
+//                }
             }
         } catch {
             VLog(.error, "downloader id: \(id), write data failure: \(error)")
