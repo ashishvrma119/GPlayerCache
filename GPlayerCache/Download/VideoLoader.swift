@@ -26,9 +26,13 @@ extension VideoLoader: VideoLoaderType {
                                          session: session,
                                          url: url,
                                          loadingRequest: loadingRequest,
-                                         fileHandle: fileHandle)
+                                         fileHandle: fileHandle,
+                                         player: player)
         downloader.delegate = self
-        downLoaders.append(downloader)
+        accessQueue.sync {[weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.downLoaders.append(downloader)
+        }
         downloader.execute()
         print("Total loading request so far \(downLoaders.count)")
         print("Total item in Queue so far \(DownloadQueue.shared.queue)")
@@ -56,10 +60,9 @@ extension VideoLoader: VideoDownloaderDelegate {
     }
     
     func downloaderFinish(_ downloader: VideoDownloader) {
-        downloader.finish()
-        downLoaders.removeAll { $0.loadingRequest == downloader.loadingRequest }
+            downloader.finish()
+            downLoaders.removeAll { $0.loadingRequest == downloader.loadingRequest }
     }
-    
     func downloader(_ downloader: VideoDownloader, finishWith error: Error?) {
         VLog(.error, "loader download failure: \(String(describing: error))")
         cancel()
@@ -70,7 +73,6 @@ fileprivate struct DownloadQueue {
     
     static let shared = DownloadQueue()
     
-    //let queue: OperationQueue = OperationQueue()
     let queue: OperationQueue = OperationQueue()
     init() {
         queue.name = "com.Gluedin.download.queue"
@@ -85,21 +87,26 @@ class VideoLoader: NSObject {
     let paths: VideoCachePaths
     let url: VideoURLType
     let cacheFragments: [VideoCacheFragment]
-    
+    var player: AVPlayer? // Add a reference to the AVPlayer
     var session: URLSession?
-    
+    private let accessQueue = DispatchQueue(label: "com.Gluedin.VideoLoader.accessQueue")
+
     deinit {
+        print("message: VideoLoader cache deinit")
         VLog(.info, "VideoLoader deinit\n")
         cancel()
         session?.invalidateAndCancel()
         session = nil
+        player = nil
+        delegate = nil
     }
-    
+   
     init(paths: VideoCachePaths,
          url: VideoURLType,
          cacheFragments: [VideoCacheFragment],
          allowsCellularAccess: Bool,
-         delegate: VideoLoaderDelegate?) {
+         delegate: VideoLoaderDelegate?,
+         player: AVPlayer?) {
         
         self.paths = paths
         self.url = url
@@ -125,6 +132,8 @@ class VideoLoader: NSObject {
     
     private var downLoaders_: [VideoDownloaderType] = []
     private let lock = NSLock()
+    private let downloadQueue = DispatchQueue(label: "com.Gluedin.VideoLoader.downloadQueue", attributes: .concurrent)
+
     private var downLoaders: [VideoDownloaderType] {
         get { lock.lock(); defer { lock.unlock() }; return downLoaders_ }
         set { lock.lock(); defer { lock.unlock() }; downLoaders_ = newValue }
@@ -147,36 +156,45 @@ extension VideoLoader: URLSessionDataDelegate {
                     dataTask: URLSessionDataTask,
                     didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        downLoaders.forEach {
-            if $0.task == dataTask {
-                $0.dataReceiver?.urlSession?(session,
-                                             dataTask: dataTask,
-                                             didReceive: response,
-                                             completionHandler: completionHandler)
+        accessQueue.sync {[weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.downLoaders.forEach {
+                if $0.task == dataTask {
+                    $0.dataReceiver?.urlSession?(session,
+                                                 dataTask: dataTask,
+                                                 didReceive: response,
+                                                 completionHandler: completionHandler)
+                }
             }
         }
     }
-    
+
     func urlSession(_ session: URLSession,
                     dataTask: URLSessionDataTask,
                     didReceive data: Data) {
-        downLoaders.forEach {
-            if $0.task == dataTask {
-                $0.dataReceiver?.urlSession?(session,
-                                             dataTask: dataTask,
-                                             didReceive: data)
+        accessQueue.sync {[weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.downLoaders.forEach {
+                if $0.task == dataTask {
+                    $0.dataReceiver?.urlSession?(session,
+                                                 dataTask: dataTask,
+                                                 didReceive: data)
+                }
             }
         }
     }
-    
+
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     didCompleteWithError error: Error?) {
-        downLoaders.forEach {
-            if $0.task == task {
-                $0.dataReceiver?.urlSession?(session,
-                                             task: task,
-                                             didCompleteWithError: error)
+        accessQueue.sync {[weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.downLoaders.forEach {
+                if $0.task == task {
+                    $0.dataReceiver?.urlSession?(session,
+                                                 task: task,
+                                                 didCompleteWithError: error)
+                }
             }
         }
     }

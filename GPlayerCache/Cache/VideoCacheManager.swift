@@ -1,8 +1,316 @@
+////
+////  AVPlayerItem+Cache.swift
+////
+////  GluedInCache
+////
 //
-//  AVPlayerItem+Cache.swift
+//import Foundation
+//import UIKit
+//import AVFoundation
 //
-//  GluedInCache
+//enum BoolValues {
+//    case `default`(Bool)
+//    case auto(Bool)
+//    case manual(Bool)
 //
+//    var value: Bool {
+//        switch self {
+//        case .default(let b):   return b
+//        case .auto(let b):      return b
+//        case .manual(let b):    return b
+//        }
+//    }
+//}
+//
+//let FileM = FileManager.default
+//
+//public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
+//    public static let `default` = VideoCacheManager(directory: NSTemporaryDirectory().appending("GluedInCache"))
+//
+//    public let directory: String
+//
+//    public var capacityLimit: Int64 = Int64(200).MB {
+//        didSet { checkAllow() }
+//    }
+//
+//    public var fileNameConvertion: ((_ identifier: String) -> String)?
+//    
+//    public var isAutoCheckUsage: Bool = false
+//    
+//    public var allowWrite: Bool {
+//        get {
+//            lock.lock()
+//            defer { lock.unlock() }
+//            return allowWrite_.value
+//        }
+//        set {
+//            lock.lock()
+//            defer { lock.unlock() }
+//            allowWrite_ = .manual(newValue)
+//        }
+//    }
+//
+//    private var allowWrite_: BoolValues = .default(true)
+//
+//    public static var logLevel: VideoCacheLogLevel {
+//        get { return videoCacheLogLevel }
+//        set { videoCacheLogLevel = newValue }
+//    }
+//
+//    deinit {
+//        NotificationCenter.default.removeObserver(self, name: VideoFileHandle.didSynchronizeNotification, object: nil)
+//        NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
+//    }
+//
+//    public init(directory path: String) {
+//        directory = path
+//        super.init()
+//        createCacheDirectory()
+//        checkAllow()
+//        NotificationCenter.default.addObserver(self, selector: #selector(autoCheckUsage), name: VideoFileHandle.didSynchronizeNotification, object: nil)
+//        NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+//    }
+//
+//    private lazy var lru: VideoLRUConfiguration = {
+//        let filePath = paths.lruFilePath()
+//        if let lruConfig = VideoLRUConfiguration.read(from: filePath) {
+//            lruConfig.filePath = filePath
+//            return lruConfig
+//        }
+//        let lruConfig = VideoLRUConfiguration(path: filePath)
+//        lruConfig.synchronize()
+//        return lruConfig
+//    }()
+//
+//    private var lastCheckTimeInterval: TimeInterval = Date().timeIntervalSince1970
+//
+//    private var downloadingUrls_: [VideoCacheKeyType: VideoURLType] = [:]
+//
+//    private let lock = NSLock()
+//    
+//    private var reserveRequired = true
+//    
+//    private var downloaders: [String: VideoDownloader] = [:]
+//    private let downloadQueue = DispatchQueue(label: "com.GluedIn.downloadQueue", attributes: .concurrent)
+//    private let downloadLock = NSLock()
+//
+//    public func startDownload(for url: VideoURLType,
+//                              loadingRequest: AVAssetResourceLoadingRequest,
+//                              paths: VideoCachePaths, 
+//                              fileHandle: VideoFileHandle) {
+//        downloadQueue.async(flags: .barrier) {
+//            let downloader = VideoDownloader(paths: paths, session: URLSession.shared, url: url, loadingRequest: loadingRequest, fileHandle: fileHandle)
+//            downloader.delegate = self
+//            self.addDownloading(url: url)
+//            self.downloaders[url.key] = downloader
+//            downloader.execute()
+//        }
+//    }
+//
+//    public func stopAllDownloads() {
+//        downloadQueue.async(flags: .barrier) {
+//            self.downloaders.forEach { $0.value.cancel() }
+//            self.downloaders.removeAll()
+//        }
+//    }
+//
+//    private func cleanupDownloader(_ downloader: VideoDownloader) {
+//        downloadQueue.async(flags: .barrier) {
+//            self.removeDownloading(url: downloader.url)
+//            self.downloaders.removeValue(forKey: downloader.url.key)
+//        }
+//    }
+//
+//    func downloaderAllowWriteData(_ downloader: VideoDownloader) -> Bool {
+//        return true
+//    }
+//
+//    func downloaderFinish(_ downloader: VideoDownloader) {
+//        cleanupDownloader(downloader)
+//    }
+//
+//    func downloader(_ downloader: VideoDownloader, finishWith error: Error?) {
+//        cleanupDownloader(downloader)
+//    }
+//
+//    public var lruConfig: VideoLRUConfigurationType { return lru }
+//    
+//    private func checkAllow() {
+//        guard isAutoCheckUsage else { return }
+//        VLog(.info, "allow write: \(allowWrite_)")
+//        switch allowWrite_ {
+//        case .default, .auto:
+//            if let availableCapacity = UIDevice.current.availableCapacity {
+//                allowWrite_ = .auto(availableCapacity > capacityLimit)
+//                VLog(.info, "Auto \(allowWrite ? "enabled" : "disabled") allow write")
+//            }
+//        case .manual: break
+//        }
+//    }
+//    
+//    @objc
+//    private func appDidBecomeActive() {
+//        checkAllow()
+//    }
+//    
+//    @objc
+//    private func autoCheckUsage() {
+//        guard isAutoCheckUsage else { return }
+//        let now = Date().timeIntervalSince1970
+//        guard now - lastCheckTimeInterval > 10 else { return }
+//        lastCheckTimeInterval = now
+//        checkUsage()
+//        checkAllow()
+//    }
+//
+//    private func createCacheDirectory() {
+//        if !FileM.fileExists(atPath: directory) {
+//            do {
+//                try FileM.createDirectory(atPath: directory, withIntermediateDirectories: true, attributes: nil)
+//                VLog(.info, "Video Cache directory path: \(directory)")
+//            } catch {
+//                VLog(.error, "create cache directory error: \(error)")
+//            }
+//        }
+//    }
+//    
+//    public func calculateSize() throws -> UInt64 {
+//        let contents = try FileM.contentsOfDirectory(atPath: directory)
+//        let calculateContent: (String) -> UInt64 = {
+//            guard let attributes = try? FileM.attributesOfItem(atPath: self.directory.appending("/\($0)")) else { return 0 }
+//            return (attributes as NSDictionary).fileSize()
+//        }
+//        return contents.reduce(0) { $0 + calculateContent($1) }
+//    }
+//    
+//    public func clean(url: VideoURLType, reserve: Bool = true) throws {
+//        downloadLock.lock()
+//        defer { downloadLock.unlock() }
+//        
+//        VLog(.info, "clean: \(url)")
+//        
+//        if let _ = downloadingUrls[url.key] {
+//            throw VideoCacheErrors.fileHandleWriting.error
+//        }
+//        
+//        let infoPath = paths.contenInfoPath(for: url)
+//        let configPath = paths.configurationPath(for: url)
+//        let videoPath = paths.videoPath(for: url)
+//        
+//        let cleanAllClosure = { [weak self] in
+//            try FileM.removeItem(atPath: infoPath)
+//            try FileM.removeItem(atPath: configPath)
+//            try FileM.removeItem(atPath: videoPath)
+//            self?.lru.delete(url: url)
+//        }
+//        
+//        guard let config = paths.configuration(for: infoPath) else {
+//            try cleanAllClosure()
+//            return
+//        }
+//        
+//        let reservedLength = config.reservedLength
+//        
+//        guard reservedLength > 0 else {
+//            try cleanAllClosure()
+//            return
+//        }
+//        
+//        guard reserve else {
+//            try cleanAllClosure()
+//            return
+//        }
+//        
+//        guard let fileHandle = FileHandle(forUpdatingAtPath: videoPath) else {
+//            try cleanAllClosure()
+//            return
+//        }
+//        
+//        do {
+//            try FileM.removeItem(atPath: configPath)
+//            try fileHandle.throwError_truncateFile(atOffset: UInt64(reservedLength))
+//            try fileHandle.throwError_synchronizeFile()
+//            try fileHandle.throwError_closeFile()
+//        } catch {
+//            try cleanAllClosure()
+//        }
+//    }
+//    
+//    public func cleanAll() throws {
+//        reserveRequired = true
+//        
+//        downloadLock.lock()
+//        defer { downloadLock.unlock() }
+//        
+//        let urls = downloadingUrls
+//        guard urls.count > 0 else {
+//            try FileM.removeItem(atPath: directory)
+//            createCacheDirectory()
+//            return
+//        }
+//        
+//        lru.deleteAll(without: urls)
+//        
+//        var downloadingURLs: [VideoCacheKeyType: VideoURLType] = [:]
+//        urls.forEach {
+//            downloadingURLs[paths.cacheFileName(for: $0.value)] = $0.value
+//            downloadingURLs[paths.configFileName(for: $0.value)] = $0.value
+//            downloadingURLs[paths.contenInfoPath(for: $0.value)] = $0.value
+//        }
+//        
+//        let contents = try FileM.contentsOfDirectory(atPath: directory).filter { downloadingURLs[$0] == nil }
+//        
+//        for content in contents {
+//            try FileM.removeItem(atPath: directory.appending("/\(content)"))
+//        }
+//    }
+//
+//    func visit(url: VideoURLType) {
+//        lru.visit(url: url)
+//    }
+//
+//    func checkUsage() {
+//        guard let size = try? calculateSize() else { return }
+//        
+//        VLog(.info, "cache total size: \(size)")
+//        
+//        guard size > capacityLimit else { return }
+//        
+//        let oldestUrls = lru.oldestURL(maxLength: 4, without: downloadingUrls)
+//        
+//        guard oldestUrls.count > 0 else { return }
+//        
+//        oldestUrls.forEach { try? clean(url: $0, reserve: reserveRequired) }
+//    }
+//
+//    var paths: VideoCachePaths {
+//        return VideoCachePaths(directory: directory, convertion: fileNameConvertion)
+//    }
+//
+//    func addDownloading(url: VideoURLType) {
+//        downloadingUrls[url.key] = url
+//    }
+//
+//    func removeDownloading(url: VideoURLType) {
+//        downloadingUrls.removeValue(forKey: url.key)
+//    }
+//
+//    public var downloadingUrls: [VideoCacheKeyType: VideoURLType] {
+//        get {
+//            lock.lock()
+//            defer { lock.unlock() }
+//            return downloadingUrls_
+//        }
+//        set {
+//            lock.lock()
+//            defer { lock.unlock() }
+//            downloadingUrls_ = newValue
+//        }
+//    }
+//}
+//
+
+
 
 import Foundation
 import UIKit
@@ -26,6 +334,7 @@ let FileM = FileManager.default
 
 public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
     public static let `default` = VideoCacheManager(directory: NSTemporaryDirectory().appending("GluedInCache"))
+    weak var player: AVPlayer? // Add a reference to the AVPlayer
 
     public let directory: String
 
@@ -58,6 +367,7 @@ public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
     }
 
     deinit {
+        print("message: VideoCacheManager cache deinit")
         NotificationCenter.default.removeObserver(self, name: VideoFileHandle.didSynchronizeNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
     }
@@ -94,30 +404,36 @@ public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
     private let downloadQueue = DispatchQueue(label: "com.GluedIn.downloadQueue", attributes: .concurrent)
     private let downloadLock = NSLock()
 
-    public func startDownload(for url: VideoURLType,
-                              loadingRequest: AVAssetResourceLoadingRequest,
-                              paths: VideoCachePaths, 
-                              fileHandle: VideoFileHandle) {
-        downloadQueue.async(flags: .barrier) {
-            let downloader = VideoDownloader(paths: paths, session: URLSession.shared, url: url, loadingRequest: loadingRequest, fileHandle: fileHandle)
-            downloader.delegate = self
-            self.addDownloading(url: url)
-            self.downloaders[url.key] = downloader
+    public func startDownload(for url: VideoURLType, loadingRequest: AVAssetResourceLoadingRequest, paths: VideoCachePaths, fileHandle: VideoFileHandle) {
+        downloadQueue.async(flags: .barrier) {[weak self] in
+            guard let weakSelf = self else { return }
+            let downloader = VideoDownloader(
+                paths: paths,
+                session: URLSession.shared,
+                url: url,
+                loadingRequest: loadingRequest,
+                fileHandle: fileHandle,
+                player: weakSelf.player)
+            downloader.delegate = weakSelf
+            weakSelf.addDownloading(url: url)
+            weakSelf.downloaders[url.key] = downloader
             downloader.execute()
         }
     }
 
     public func stopAllDownloads() {
-        downloadQueue.async(flags: .barrier) {
-            self.downloaders.forEach { $0.value.cancel() }
-            self.downloaders.removeAll()
+        downloadQueue.async(flags: .barrier) { [weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.downloaders.forEach { $0.value.cancel() }
+            weakSelf.downloaders.removeAll()
         }
     }
 
     private func cleanupDownloader(_ downloader: VideoDownloader) {
-        downloadQueue.async(flags: .barrier) {
-            self.removeDownloading(url: downloader.url)
-            self.downloaders.removeValue(forKey: downloader.url.key)
+        downloadQueue.async(flags: .barrier) {[weak self] in
+            guard let weakSelf = self else { return }
+            weakSelf.removeDownloading(url: downloader.url)
+            weakSelf.downloaders.removeValue(forKey: downloader.url.key)
         }
     }
 
@@ -198,10 +514,12 @@ public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
         let videoPath = paths.videoPath(for: url)
         
         let cleanAllClosure = { [weak self] in
+            guard let weakSelf = self else { return }
+
             try FileM.removeItem(atPath: infoPath)
             try FileM.removeItem(atPath: configPath)
             try FileM.removeItem(atPath: videoPath)
-            self?.lru.delete(url: url)
+            weakSelf.lru.delete(url: url)
         }
         
         guard let config = paths.configuration(for: infoPath) else {
@@ -308,4 +626,3 @@ public class VideoCacheManager: NSObject, VideoDownloaderDelegate {
         }
     }
 }
-

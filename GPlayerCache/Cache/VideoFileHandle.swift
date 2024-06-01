@@ -1,9 +1,7 @@
 //
 //  AVPlayerItem+Cache.swift
-//
 //  GluedInCache
 //
-
 
 import Foundation
 import UIKit
@@ -11,37 +9,25 @@ import UIKit
 internal let PacketLimit: Int64 = Int64(1).MB
 
 protocol VideoFileHandleType {
-    
     var configuration: VideoConfiguration { get }
-    
     func actions(for range: VideoRange) -> [Action]
-    
     func readData(for range: VideoRange) throws -> Data
-    
     func writeData(data: Data, for range: VideoRange) throws
-    
     @discardableResult
     func synchronize(notify: Bool) throws -> Bool
-    
     func close() throws
 }
 
 extension VideoFileHandleType {
-    
     var isNeedUpdateContentInfo: Bool { return configuration.contentInfo.totalLength <= 0 }
 }
 
 public class VideoFileHandle {
-    
     let url: VideoURLType
-    
-    let paths: VideoCachePaths
-    
+    var paths: VideoCachePaths
     let cacheFragments: [VideoCacheFragment]
-    
     let filePath: String
-    
-    let configuration: VideoConfiguration
+    var configuration: VideoConfiguration
     
     deinit {
         do {
@@ -50,33 +36,25 @@ public class VideoFileHandle {
         } catch {
             VLog(.error, "fileHandle synchronize and close failure: \(error)")
         }
+        print("message: VideoFileHandle cache deinit")
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     init(paths: VideoCachePaths, url: VideoURLType, cacheFragments: [VideoCacheFragment]) {
-        
         self.paths = paths
         self.url = url
         self.cacheFragments = cacheFragments
-        
         filePath = paths.videoPath(for: url)
-        
-        VLog(.info, "Video path: \(filePath)")
-        
         if !FileM.fileExists(atPath: filePath) {
             FileM.createFile(atPath: filePath, contents: nil, attributes: nil)
         }
-        
         configuration = paths.configuration(for: url)
-        
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     private lazy var readHandle = FileHandle(forReadingAtPath: filePath)
     private lazy var writeHandle = FileHandle(forWritingAtPath: filePath)
-    
     private var isWriting: Bool = false
-    
     private let lock = NSLock()
 }
 
@@ -165,7 +143,7 @@ extension VideoFileHandle: VideoFileHandleType {
         if notify {
             NotificationCenter.default.post(name: VideoFileHandle.didSynchronizeNotification,
                                             object: nil,
-                                            userInfo: [VideoFileHandle.VideoURLKey: self.url])
+                                            userInfo: [VideoFileHandle.VideoURLKey: url])
         }
         
         return configSyncResult

@@ -1,6 +1,5 @@
 //
 //  AVPlayerItem+Cache.swift
-//
 //  GluedInCache
 //
 
@@ -39,17 +38,26 @@ class VideoConfiguration: NSObject, NSCoding {
     var lastTimeInterval: TimeInterval = Date().timeIntervalSince1970
     
     required init?(coder aDecoder: NSCoder) {
-        url = aDecoder.decodeObject(forKey: "url") as! VideoURL
-        super.init()
-        contentInfo = aDecoder.decodeObject(forKey: "contentInfo") as! ContentInfo
+        // Safely unwrap and decode objects to avoid force unwrap
+        guard let decodedURL = aDecoder.decodeObject(forKey: "url") as? VideoURL,
+              let decodedContentInfo = aDecoder.decodeObject(forKey: "contentInfo") as? ContentInfo else {
+            return nil
+        }
+        url = decodedURL
+        contentInfo = decodedContentInfo
         reservedLength = aDecoder.decodeInt64(forKey: "reservedLength")
         lastTimeInterval = aDecoder.decodeDouble(forKey: "lastTimeInterval")
         
         if let frags = aDecoder.decodeObject(forKey: "fragments") as? [CodingRange] {
             fragments = frags.compactMap { VideoRange(range: $0) }
         }
+        super.init()
     }
     
+    deinit {
+        print("message: VideoConfiguration cache deinit")
+    }
+
     func encode(with aCoder: NSCoder) {
         aCoder.encode(url, forKey: "url")
         aCoder.encode(contentInfo, forKey: "contentInfo")
