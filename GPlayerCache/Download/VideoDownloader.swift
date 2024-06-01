@@ -420,7 +420,6 @@ import Foundation
 import AVFoundation
 
 protocol VideoDownloaderType: NSObjectProtocol {
-//    var delegate: VideoDownloaderDelegate? { get set }
     var url: VideoURLType { get }
     var loadingRequest: AVAssetResourceLoadingRequest { get }
     var id: Int { get }

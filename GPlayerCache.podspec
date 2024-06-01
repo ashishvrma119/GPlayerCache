@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "GPlayerCache"
-  s.version      = "1.0.3"
+  s.version      = "1.0.4"
   s.summary      = "A caching library for GPlayerCache."
   s.description  = "AVGPlayerCache is a library that provides caching functionality for GPlayerCache. It allows developers to cache video files locally for efficient playback and reduces network usage."
   s.homepage     = "https://github.com/ashishvrma119/GPlayerCache"
