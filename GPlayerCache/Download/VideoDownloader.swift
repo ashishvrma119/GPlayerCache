@@ -418,7 +418,7 @@
 
 import Foundation
 import AVFoundation
-import GluedInCoreSDK
+//import GluedInCoreSDK
 
 protocol VideoDownloaderType: NSObjectProtocol {
 //    var delegate: VideoDownloaderDelegate? { get set }
